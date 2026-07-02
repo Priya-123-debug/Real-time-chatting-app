@@ -7,12 +7,15 @@ export const getMessages = async (req, res) => {
     const { userId } = req.params;   // the other user
     const myId = req.user._id;
 
-    const messages = await Message.find({
-      $or: [
-        { senderId: myId, receiverId: userId },
-        { senderId: userId, receiverId: myId },
-      ],
-    }).sort({ createdAt: 1 });   // oldest first
+const messages = await Message.find({
+  $or: [
+    { senderId: myId, receiverId: userId },
+    { senderId: userId, receiverId: myId },
+  ],
+  deletedFor: {
+    $ne: myId,
+  },
+}).sort({ createdAt: 1 });
 
     res.json(messages);
   } catch (err) {
@@ -38,5 +41,51 @@ export const sendMessage = async (req, res) => {
     res.status(201).json(message);
   } catch (err) {
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+
+
+export const deleteMessageForMe = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const myId = req.user._id;
+
+    // Find message
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({
+        message: "Message not found",
+      });
+    }
+
+    // Authorization
+    const isParticipant =
+      message.senderId.toString() === myId.toString() ||
+      message.receiverId.toString() === myId.toString();
+
+    if (!isParticipant) {
+      return res.status(403).json({
+        message: "Unauthorized",
+      });
+    }
+
+    // Delete for current user
+    await Message.findByIdAndUpdate(messageId, {
+      $addToSet: {
+        deletedFor: myId,
+      },
+    });
+
+    return res.status(200).json({
+      message: "Message deleted successfully.",
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      message: "Server Error",
+    });
   }
 };

@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
-import { FaInfoCircle, FaArrowLeft, FaPaperPlane, FaUser } from "react-icons/fa";
+import { FaInfoCircle, FaArrowLeft, FaPaperPlane, FaUser, FaPaperclip, FaTimes, FaFileAlt, FaTrash, FaUserSlash } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
-import { getMessages, sendMessage } from "../services/messageService";
+import { getMessages, sendMessage, deleteMessage,clearChat } from "../services/messageService";
 import { formatTime } from "../utilis/formatTime";
+
+const TEN_MIN = 10 * 60 * 1000;
 
 function Chatcontainer({ selectedUser, onBack }) {
   const { user } = useAuth();
@@ -11,7 +13,11 @@ function Chatcontainer({ selectedUser, onBack }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [activeMessageId, setActiveMessageId] = useState(null);
+  const [mediaFile, setMediaFile] = useState(null);
+  const [mediaPreview, setMediaPreview] = useState(null);
   const bottomRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (!selectedUser) return;
@@ -38,27 +44,109 @@ function Chatcontainer({ selectedUser, onBack }) {
       }
     });
 
-    return () => socket.off("newMessage");
+    socket.on("messageDeleted", ({ messageId }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === messageId ? { ...m, text: "This message was deleted", deleted: true, mediaUrl: null } : m
+        )
+      );
+    });
+
+    return () => {
+      socket.off("newMessage");
+      socket.off("messageDeleted");
+    };
   }, [socket, selectedUser]);
+
+  // clear chat, triggered from Rightsidebar's info menu
+  useEffect(() => {
+    const handler = async (e) => {
+      if (!selectedUser || e.detail.userId !== selectedUser._id) return;
+      try {
+        await clearChat(selectedUser._id);
+        setMessages([]);
+      } catch (err) {
+        console.error("Clear chat failed:", err);
+      }
+    };
+    window.addEventListener("talkie:clear-chat", handler);
+    return () => window.removeEventListener("talkie:clear-chat", handler);
+  }, [selectedUser]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const handleToggleInfo = () => {
+    window.dispatchEvent(new CustomEvent("talkie:toggle-info"));
+  };
+
+  // ---------- media picker ----------
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setMediaFile(file);
+    setMediaPreview(URL.createObjectURL(file));
+  };
+
+  const clearMedia = () => {
+    setMediaFile(null);
+    setMediaPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // ---------- send ----------
   const handleSend = async () => {
-    if (input.trim() === "") return;
+    if (!input.trim() && !mediaFile) return;
 
     try {
-      const res = await sendMessage(selectedUser._id, input);
+      let res;
+      if (mediaFile) {
+        const formData = new FormData();
+        formData.append("text", input);
+        formData.append("media", mediaFile);
+        res = await sendMessage(selectedUser._id, formData, true);
+      } else {
+        res = await sendMessage(selectedUser._id, input);
+      }
       setMessages((prev) => [...prev, res.data]);
       setInput("");
+      clearMedia();
     } catch (err) {
       console.error("Send failed:", err);
     }
   };
 
-  const handleToggleInfo = () => {
-    window.dispatchEvent(new CustomEvent("talkie:toggle-info"));
+  // ---------- delete ----------
+  const canDeleteForEveryone = (message) => {
+    const isMine = message.senderId === user._id;
+    if (!isMine) return false;
+    return Date.now() - new Date(message.createdAt).getTime() < TEN_MIN;
+  };
+
+  const handleDeleteForMe = async (message) => {
+    try {
+      await deleteMessage(message._id, "me");
+      setMessages((prev) => prev.filter((m) => m._id !== message._id));
+    } catch (err) {
+      console.error("Delete failed:", err);
+    }
+    setActiveMessageId(null);
+  };
+
+  const handleDeleteForEveryone = async (message) => {
+    try {
+      await deleteMessage(message._id, "everyone");
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === message._id ? { ...m, text: "This message was deleted", deleted: true, mediaUrl: null } : m
+        )
+      );
+      socket?.emit("deleteMessage", { messageId: message._id, receiverId: selectedUser._id });
+    } catch (err) {
+      console.error("Delete failed:", err);
+    }
+    setActiveMessageId(null);
   };
 
   if (!selectedUser) {
@@ -74,26 +162,18 @@ function Chatcontainer({ selectedUser, onBack }) {
   }
 
   return (
-    <div className="h-full min-h-0 flex flex-col bg-[#0B0F1A]">
+    <div className="h-full min-h-0 flex flex-col bg-[#0B0F1A] relative">
 
       {/* Header */}
       <div className="shrink-0 flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b border-white/5 bg-[#141924]">
         <div className="flex items-center gap-3 min-w-0">
-          <button
-            onClick={onBack}
-            className="md:hidden text-gray-400 hover:text-white p-1 -ml-1 shrink-0"
-            aria-label="Back to chats"
-          >
+          <button onClick={onBack} className="md:hidden text-gray-400 hover:text-white p-1 -ml-1 shrink-0" aria-label="Back to chats">
             <FaArrowLeft className="text-lg" />
           </button>
           <div className="relative shrink-0">
             <div className="w-11 h-11 rounded-full p-[2px] bg-gradient-to-br from-violet-500 to-cyan-400">
               {selectedUser.profilePic ? (
-                <img
-                  src={selectedUser.profilePic}
-                  alt=""
-                  className="w-full h-full rounded-full object-cover border-2 border-[#141924]"
-                />
+                <img src={selectedUser.profilePic} alt="" className="w-full h-full rounded-full object-cover border-2 border-[#141924]" />
               ) : (
                 <div className="w-full h-full rounded-full bg-[#1C2333] border-2 border-[#141924] flex items-center justify-center">
                   <FaUser className="text-sm text-gray-400" />
@@ -112,6 +192,11 @@ function Chatcontainer({ selectedUser, onBack }) {
         </button>
       </div>
 
+      {/* backdrop to close message menu */}
+      {activeMessageId && (
+        <div className="fixed inset-0 z-40" onClick={() => setActiveMessageId(null)} />
+      )}
+
       {/* Messages */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-5 py-4 space-y-3">
         {loading ? (
@@ -121,19 +206,70 @@ function Chatcontainer({ selectedUser, onBack }) {
         ) : (
           messages.map((message) => {
             const isMine = message.senderId === user._id;
+            const isMenuOpen = activeMessageId === message._id;
+            const isImage = message.mediaUrl && (message.mediaType || "").startsWith("image");
+
             return (
-              <div key={message._id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[78%] md:max-w-[65%] px-4 py-2.5 shadow-md ${
-                    isMine
-                      ? "bg-gradient-to-br from-violet-500 to-cyan-500 text-white rounded-2xl rounded-br-sm"
-                      : "bg-[#1C2333] text-white rounded-2xl rounded-bl-sm"
-                  }`}
-                >
-                  <p className="text-sm break-words">{message.text}</p>
-                  <p className="text-[10px] mt-1.5 opacity-70 text-right">
-                    {formatTime(message.createdAt)}
-                  </p>
+       <div key={message._id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+  <div className="relative max-w-[78%] md:max-w-[65%]">
+    <div
+      onClick={() => !message.deleted && setActiveMessageId(isMenuOpen ? null : message._id)}
+      className={`inline-block w-fit max-w-full px-4 py-2.5 shadow-md cursor-pointer select-none ${
+        message.deleted
+          ? "bg-[#1C2333]/60 text-gray-500 italic rounded-2xl"
+          : isMine
+          ? "bg-gradient-to-br from-violet-500 to-cyan-500 text-white rounded-2xl rounded-br-sm"
+          : "bg-[#1C2333] text-white rounded-2xl rounded-bl-sm"
+      }`}
+    >
+                    {message.deleted ? (
+                      <p className="text-sm flex items-center gap-2"><FaUserSlash className="text-xs" /> This message was deleted</p>
+                    ) : (
+                      <>
+                        {message.mediaUrl && (
+                          isImage ? (
+                            <img src={message.mediaUrl} alt="attachment" className="rounded-lg mb-2 max-w-full max-h-64 object-cover" />
+                          ) : (
+                            
+                           <a   href={message.mediaUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-2 bg-black/20 px-3 py-2 rounded-lg mb-2 text-sm hover:bg-black/30 transition"
+                            >
+                              <FaFileAlt /> View file
+                            </a>
+                          )
+                        )}
+                        {message.text && <p className="text-sm break-words">{message.text}</p>}
+                        <p className="text-[10px] mt-1.5 opacity-70 text-right">{formatTime(message.createdAt)}</p>
+                      </>
+                    )}
+                  </div>
+
+                  {/* tap menu */}
+                  {isMenuOpen && !message.deleted && (
+                    <div
+                      className={`absolute z-50 mt-1 min-w-[170px] bg-[#1C2333] border border-white/10 rounded-xl shadow-xl shadow-black/40 overflow-hidden ${
+                        isMine ? "right-0" : "left-0"
+                      }`}
+                    >
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteForMe(message); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-200 hover:bg-white/5 flex items-center gap-2"
+                      >
+                        <FaTrash className="text-xs" /> Delete for me
+                      </button>
+                      {canDeleteForEveryone(message) && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteForEveryone(message); }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-400/10 flex items-center gap-2 border-t border-white/5"
+                        >
+                          <FaTrash className="text-xs" /> Delete for everyone
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -142,8 +278,42 @@ function Chatcontainer({ selectedUser, onBack }) {
         <div ref={bottomRef} />
       </div>
 
+      {/* Media preview strip */}
+      {mediaPreview && (
+        <div className="shrink-0 px-4 md:px-5 pt-3 bg-[#141924] border-t border-white/5">
+          <div className="relative inline-block">
+            {mediaFile?.type.startsWith("image") ? (
+              <img src={mediaPreview} alt="preview" className="h-20 w-20 object-cover rounded-lg border border-white/10" />
+            ) : (
+              <div className="h-20 w-20 rounded-lg border border-white/10 bg-[#1C2333] flex flex-col items-center justify-center text-gray-400 text-xs px-1 text-center">
+                <FaFileAlt className="mb-1" /> {mediaFile?.name}
+              </div>
+            )}
+            <button
+              onClick={clearMedia}
+              className="absolute -top-2 -right-2 bg-red-500 rounded-full w-5 h-5 flex items-center justify-center text-white"
+            >
+              <FaTimes className="text-[10px]" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Input */}
-      <div className="shrink-0 px-4 md:px-5 py-3 md:py-4 border-t border-white/5 bg-[#141924] flex items-center gap-3">
+      <div className="shrink-0 px-4 md:px-5 py-3 md:py-4 border-t border-white/5 bg-[#141924] flex items-center gap-2 md:gap-3">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,.pdf,.doc,.docx"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="text-gray-400 hover:text-white transition p-2 shrink-0"
+        >
+          <FaPaperclip className="text-lg" />
+        </button>
         <input
           type="text"
           placeholder="Type a message..."
@@ -154,7 +324,7 @@ function Chatcontainer({ selectedUser, onBack }) {
         />
         <button
           onClick={handleSend}
-          disabled={!input.trim()}
+          disabled={!input.trim() && !mediaFile}
           className="bg-gradient-to-br from-violet-500 to-cyan-500 w-11 h-11 md:w-auto md:px-6 md:py-3 rounded-full text-white font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center justify-center shrink-0"
         >
           <FaPaperPlane className="text-sm md:hidden" />
