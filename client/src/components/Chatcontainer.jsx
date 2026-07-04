@@ -1,24 +1,25 @@
 import React, { useState, useRef, useEffect } from "react";
-import { FaInfoCircle, FaArrowLeft, FaPaperPlane, FaUser, FaPaperclip, FaTimes, FaFileAlt, FaTrash, FaUserSlash } from "react-icons/fa";
+import { FaInfoCircle, FaArrowLeft, FaPaperPlane, FaUser, FaPaperclip, FaTimes, FaFileAlt, FaTrash, FaUserSlash, FaEllipsisV } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
-import { getMessages, sendMessage, deleteMessage,clearChat } from "../services/messageService";
+import { getMessages, sendMessage, deleteMessage, clearChat } from "../services/messageService";
 import { formatTime } from "../utilis/formatTime";
 
 const TEN_MIN = 10 * 60 * 1000;
 
 function Chatcontainer({ selectedUser, onBack }) {
   const { user } = useAuth();
-  const { socket } = useSocket();
+  const { socket, onlineUsers } = useSocket();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeMessageId, setActiveMessageId] = useState(null);
   const [mediaFile, setMediaFile] = useState(null);
   const [mediaPreview, setMediaPreview] = useState(null);
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
-  const {  onlineUsers } = useSocket();
+
   const isOnline = selectedUser && onlineUsers.includes(selectedUser._id);
 
   useEffect(() => {
@@ -60,7 +61,7 @@ function Chatcontainer({ selectedUser, onBack }) {
     };
   }, [socket, selectedUser]);
 
-  // clear chat, triggered from Rightsidebar's info menu
+  // clear chat, triggered from Rightsidebar's info menu (kept for backward compatibility)
   useEffect(() => {
     const handler = async (e) => {
       if (!selectedUser || e.detail.userId !== selectedUser._id) return;
@@ -81,6 +82,17 @@ function Chatcontainer({ selectedUser, onBack }) {
 
   const handleToggleInfo = () => {
     window.dispatchEvent(new CustomEvent("talkie:toggle-info"));
+  };
+
+  // ---------- header menu: clear chat ----------
+  const handleClearChat = async () => {
+    try {
+      await clearChat(selectedUser._id);
+      setMessages([]);
+    } catch (err) {
+      console.error("Clear chat failed:", err);
+    }
+    setShowHeaderMenu(false);
   };
 
   // ---------- media picker ----------
@@ -182,26 +194,50 @@ function Chatcontainer({ selectedUser, onBack }) {
                 </div>
               )}
             </div>
-          <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#141924] ${
-  isOnline ? "bg-emerald-400" : "bg-gray-500"
-}`} />
+            <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#141924] ${
+              isOnline ? "bg-emerald-400" : "bg-gray-500"
+            }`} />
           </div>
           <div className="min-w-0">
             <p className="text-white font-semibold font-['Sora'] truncate">{selectedUser.username}</p>
-          
             <span className={isOnline ? "text-emerald-400 text-xs" : "text-gray-500 text-xs"}>
-  {isOnline ? "Online" : "Offline"}
-</span>
+              {isOnline ? "Online" : "Offline"}
+            </span>
           </div>
         </div>
-        <button onClick={handleToggleInfo} className="text-gray-400 hover:text-white transition shrink-0 p-1">
-          <FaInfoCircle className="text-xl" />
-        </button>
+
+        {/* Right side: info + three-dot menu */}
+        <div className="flex items-center gap-1 shrink-0 relative">
+          <button onClick={handleToggleInfo} className="text-gray-400 hover:text-white transition p-2">
+            <FaInfoCircle className="text-xl" />
+          </button>
+
+          <button
+            onClick={() => setShowHeaderMenu((prev) => !prev)}
+            className="text-gray-400 hover:text-white transition p-2"
+          >
+            <FaEllipsisV className="text-lg" />
+          </button>
+
+          {showHeaderMenu && (
+            <div className="absolute top-full right-0 mt-1 min-w-[160px] bg-[#1C2333] border border-white/10 rounded-xl shadow-xl shadow-black/40 overflow-hidden z-50">
+              <button
+                onClick={handleClearChat}
+                className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-400/10 flex items-center gap-2"
+              >
+                <FaTrash className="text-xs" /> Clear Chat
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* backdrop to close message menu */}
+      {/* backdrop to close message menu / header menu */}
       {activeMessageId && (
         <div className="fixed inset-0 z-40" onClick={() => setActiveMessageId(null)} />
+      )}
+      {showHeaderMenu && (
+        <div className="fixed inset-0 z-40" onClick={() => setShowHeaderMenu(false)} />
       )}
 
       {/* Messages */}
@@ -217,18 +253,18 @@ function Chatcontainer({ selectedUser, onBack }) {
             const isImage = message.mediaUrl && (message.mediaType || "").startsWith("image");
 
             return (
-       <div key={message._id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
-  <div className="relative max-w-[78%] md:max-w-[65%]">
-    <div
-      onClick={() => !message.deleted && setActiveMessageId(isMenuOpen ? null : message._id)}
-      className={`inline-block w-fit max-w-full px-4 py-2.5 shadow-md cursor-pointer select-none ${
-        message.deleted
-          ? "bg-[#1C2333]/60 text-gray-500 italic rounded-2xl"
-          : isMine
-          ? "bg-gradient-to-br from-violet-500 to-cyan-500 text-white rounded-2xl rounded-br-sm"
-          : "bg-[#1C2333] text-white rounded-2xl rounded-bl-sm"
-      }`}
-    >
+              <div key={message._id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                <div className="relative max-w-[78%] md:max-w-[65%]">
+                  <div
+                    onClick={() => !message.deleted && setActiveMessageId(isMenuOpen ? null : message._id)}
+                    className={`inline-block w-fit max-w-full px-4 py-2.5 shadow-md cursor-pointer select-none ${
+                      message.deleted
+                        ? "bg-[#1C2333]/60 text-gray-500 italic rounded-2xl"
+                        : isMine
+                        ? "bg-gradient-to-br from-violet-500 to-cyan-500 text-white rounded-2xl rounded-br-sm"
+                        : "bg-[#1C2333] text-white rounded-2xl rounded-bl-sm"
+                    }`}
+                  >
                     {message.deleted ? (
                       <p className="text-sm flex items-center gap-2"><FaUserSlash className="text-xs" /> This message was deleted</p>
                     ) : (
@@ -237,8 +273,8 @@ function Chatcontainer({ selectedUser, onBack }) {
                           isImage ? (
                             <img src={message.mediaUrl} alt="attachment" className="rounded-lg mb-2 max-w-full max-h-64 object-cover" />
                           ) : (
-                            
-                           <a   href={message.mediaUrl}
+                            <a
+                              href={message.mediaUrl}
                               target="_blank"
                               rel="noreferrer"
                               onClick={(e) => e.stopPropagation()}

@@ -12,7 +12,7 @@ export const deleteMessage = (messageId, mode) =>
   });
 
 export const clearChat = (userId) =>
-  api.delete(`/api/messages/clear/${userId}`);
+  api.post(`/api/messages/clear/${userId}`);
 
 export const getUsers = () =>
   api.get("/api/users");
