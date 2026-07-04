@@ -21,8 +21,12 @@ export function SocketProvider({ children }) {
 
     // server sends back list of online user IDs
     s.on("getOnlineUsers", (users) => setOnlineUsers(users));
+    return () => {
+  s.off("getOnlineUsers");
+  s.disconnect();
+};
 
-    return () => s.disconnect();  // cleanup on logout
+   
   }, [user]);
 
   return (

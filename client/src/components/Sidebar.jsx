@@ -4,10 +4,15 @@ import { FaSearch, FaUser } from "react-icons/fa";
 import { useAuth } from '../context/AuthContext';
 import { logout } from '../services/authService';
 import { getAvatarUrl } from "../utilis/avatar";
+import { useSocket } from "../context/SocketContext";
+
+
 
 function Sidebar({ users = [], loading, selectedUser, setSelectedUser }) {
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
+  
+  const { onlineUsers } = useSocket();
 
   const handleLogout = async () => {
     await logout();
@@ -83,6 +88,7 @@ function Sidebar({ users = [], loading, selectedUser, setSelectedUser }) {
         ) : (
           users.map((u) => {
             const isActive = selectedUser?._id === u._id;
+             const isOnline = onlineUsers.includes(u._id);
             return (
               <div
                 key={u._id}
@@ -101,11 +107,15 @@ function Sidebar({ users = [], loading, selectedUser, setSelectedUser }) {
                       <FaUser className="text-xl text-gray-400" />
                     </div>
                   )}
-                  <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#0B0F1A]" />
+                 <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#141924] ${
+  isOnline ? "bg-emerald-400" : "bg-gray-500"
+}`} />
                 </div>
                 <div className="flex flex-col leading-5 min-w-0">
                   <p className="font-medium text-sm truncate">{u.username}</p>
-                  <span className="text-emerald-400 text-xs">Online</span>
+                   <span className={`text-xs ${isOnline ? "text-emerald-400" : "text-gray-500"}`}>
+          {isOnline ? "Online" : "Offline"}
+        </span>
                 </div>
               </div>
             );

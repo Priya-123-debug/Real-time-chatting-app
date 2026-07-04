@@ -12,26 +12,68 @@ const io = new Server(server, {
   },
 });
 
-// store online users { userId: socketId }
-const userSocketMap = {};
+// userId -> Set(socketIds)
+const userSocketMap = new Map();
 
+// Returns one socket id (useful for direct messaging)
 export const getReceiverSocketId = (userId) => {
-  return userSocketMap[userId];
+  const sockets = userSocketMap.get(userId);
+
+  if (!sockets || sockets.size === 0) {
+    return null;
+  }
+
+  return [...sockets][0];
+};
+
+// Returns all online users
+export const getOnlineUsers = () => {
+  return [...userSocketMap.keys()];
 };
 
 io.on("connection", (socket) => {
+  console.log("Socket Connected:", socket.id);
+
   const userId = socket.handshake.query.userId;
 
   if (userId) {
-    userSocketMap[userId] = socket.id;
+    // First connection of this user?
+    if (!userSocketMap.has(userId)) {
+      userSocketMap.set(userId, new Set());
+    }
+
+    // Add this socket to the user's active sockets
+    userSocketMap.get(userId).add(socket.id);
+
+    console.log(userSocketMap);
+
+    // Notify everyone
+    io.emit("getOnlineUsers", getOnlineUsers());
   }
 
-  // send online users list to everyone
-  io.emit("getOnlineUsers", Object.keys(userSocketMap));
-
   socket.on("disconnect", () => {
-    delete userSocketMap[userId];
-    io.emit("getOnlineUsers", Object.keys(userSocketMap));
+    console.log("Socket Disconnected:", socket.id);
+
+    if (!userId) return;
+
+    const sockets = userSocketMap.get(userId);
+
+    if (!sockets) return;
+
+    // Remove only this socket
+    sockets.delete(socket.id);
+
+    // If no active sockets remain, remove the user
+    if (sockets.size === 0) {
+      userSocketMap.delete(userId);
+
+      // Later we'll also update lastSeen in MongoDB here
+    }
+
+    console.log(userSocketMap);
+
+    // Notify everyone
+    io.emit("getOnlineUsers", getOnlineUsers());
   });
 });
 

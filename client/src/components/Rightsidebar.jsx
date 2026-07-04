@@ -2,10 +2,16 @@ import React, { useState, useEffect } from "react";
 import { FaTimes, FaUser } from "react-icons/fa";
 import { useAuth } from '../context/AuthContext';
 import { logout } from '../services/authService';
+import { useSocket } from "../context/SocketContext";
 
 function Rightsidebar({ selectedUser }) {
   const { setUser } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+  
+  const { onlineUsers } = useSocket();
+  
+
+  const isOnline = selectedUser && onlineUsers.includes(selectedUser._id);
 
   useEffect(() => {
     const toggle = () => setIsOpen((prev) => !prev);
@@ -62,9 +68,10 @@ function Rightsidebar({ selectedUser }) {
             )}
           </div>
           <h2 className="mt-4 text-xl font-semibold font-['Sora']">{selectedUser.username}</h2>
-          <p className="text-emerald-400 text-sm mt-1 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Online
-          </p>
+         <p className={`text-sm mt-1 flex items-center gap-1 ${isOnline ? "text-emerald-400" : "text-gray-500"}`}>
+  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-400" : "bg-gray-500"}`} />
+  {isOnline ? "Online" : "Offline"}
+</p>
         </div>
 
         {/* Media */}

@@ -18,6 +18,8 @@ function Chatcontainer({ selectedUser, onBack }) {
   const [mediaPreview, setMediaPreview] = useState(null);
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
+  const {  onlineUsers } = useSocket();
+  const isOnline = selectedUser && onlineUsers.includes(selectedUser._id);
 
   useEffect(() => {
     if (!selectedUser) return;
@@ -180,11 +182,16 @@ function Chatcontainer({ selectedUser, onBack }) {
                 </div>
               )}
             </div>
-            <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#141924]" />
+          <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#141924] ${
+  isOnline ? "bg-emerald-400" : "bg-gray-500"
+}`} />
           </div>
           <div className="min-w-0">
             <p className="text-white font-semibold font-['Sora'] truncate">{selectedUser.username}</p>
-            <span className="text-emerald-400 text-xs">Online</span>
+          
+            <span className={isOnline ? "text-emerald-400 text-xs" : "text-gray-500 text-xs"}>
+  {isOnline ? "Online" : "Offline"}
+</span>
           </div>
         </div>
         <button onClick={handleToggleInfo} className="text-gray-400 hover:text-white transition shrink-0 p-1">
