@@ -208,9 +208,7 @@ function Chatcontainer({ selectedUser, onBack }) {
 
         {/* Right side: info + three-dot menu */}
         <div className="flex items-center gap-1 shrink-0 relative">
-          <button onClick={handleToggleInfo} className="text-gray-400 hover:text-white transition p-2">
-            <FaInfoCircle className="text-xl" />
-          </button>
+        
 
           <button
             onClick={() => setShowHeaderMenu((prev) => !prev)}
