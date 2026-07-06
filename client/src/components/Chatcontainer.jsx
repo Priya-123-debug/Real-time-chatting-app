@@ -4,10 +4,12 @@ import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
 import { getMessages, sendMessage, deleteMessage, clearChat } from "../services/messageService";
 import { formatTime } from "../utilis/formatTime";
+import useChatEffects from "./hooks/useChatEffects";
 
 const TEN_MIN = 10 * 60 * 1000;
 
 function Chatcontainer({ selectedUser, onBack }) {
+ 
   const { user } = useAuth();
   const { socket, onlineUsers } = useSocket();
   const [messages, setMessages] = useState([]);
@@ -47,89 +49,19 @@ const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
         setIsTyping(false);
     }, 1000);
 };
+useChatEffects({
+  socket,
+  selectedUser,
+  messages,
+  setMessages,
+  setLoading,
+  bottomRef,
+  setIsOtherUserTyping,
+});
 
-useEffect(() => {
-  if (!socket || !selectedUser) return;
+ 
 
-  const handleTypingStart = ({ userId }) => {
-    if (userId === selectedUser._id) {
-      setIsOtherUserTyping(true);
-    }
-  };
-
-  const handleTypingStop = ({ userId }) => {
-    if (userId === selectedUser._id) {
-      setIsOtherUserTyping(false);
-    }
-  };
-
-  socket.on("typingStart", handleTypingStart);
-  socket.on("typingStop", handleTypingStop);
-
-  return () => {
-    socket.off("typingStart", handleTypingStart);
-    socket.off("typingStop", handleTypingStop);
-  };
-}, [socket, selectedUser]);
-
-  useEffect(() => {
-    if (!selectedUser) return;
-
-    setLoading(true);
-    getMessages(selectedUser._id)
-      .then((res) => {
-        if (Array.isArray(res.data)) setMessages(res.data);
-        else setMessages([]);
-      })
-      .catch((err) => {
-        console.error(err);
-        setMessages([]);
-      })
-      .finally(() => setLoading(false));
-  }, [selectedUser]);
-
-  useEffect(() => {
-    if (!socket || !selectedUser) return;
-
-    socket.on("newMessage", (message) => {
-      if (message.senderId === selectedUser._id) {
-        setMessages((prev) => [...prev, message]);
-      }
-    });
-
-    socket.on("messageDeleted", ({ messageId }) => {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m._id === messageId ? { ...m, text: "This message was deleted", deleted: true, mediaUrl: null } : m
-        )
-      );
-    });
-
-    return () => {
-      socket.off("newMessage");
-      socket.off("messageDeleted");
-    };
-  }, [socket, selectedUser]);
-
-  // clear chat, triggered from Rightsidebar's info menu (kept for backward compatibility)
-  useEffect(() => {
-    const handler = async (e) => {
-      if (!selectedUser || e.detail.userId !== selectedUser._id) return;
-      try {
-        await clearChat(selectedUser._id);
-        setMessages([]);
-      } catch (err) {
-        console.error("Clear chat failed:", err);
-      }
-    };
-    window.addEventListener("talkie:clear-chat", handler);
-    return () => window.removeEventListener("talkie:clear-chat", handler);
-  }, [selectedUser]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
+ 
   const handleToggleInfo = () => {
     window.dispatchEvent(new CustomEvent("talkie:toggle-info"));
   };
@@ -214,9 +146,7 @@ useEffect(() => {
   };
 
 
-  useEffect(() => {
-  setIsOtherUserTyping(false);
-}, [selectedUser]);
+
 
   if (!selectedUser) {
     return (
