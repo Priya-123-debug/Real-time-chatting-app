@@ -16,3 +16,5 @@ export const clearChat = (userId) =>
 
 export const getUsers = () =>
   api.get("/api/users");
+export const markMessagesSeen = (userId) =>
+  api.put(`/api/messages/seen/${userId}`);

@@ -5,6 +5,7 @@ import { useSocket } from "../context/SocketContext";
 import { getMessages, sendMessage, deleteMessage, clearChat } from "../services/messageService";
 import { formatTime } from "../utilis/formatTime";
 import useChatEffects from "./hooks/useChatEffects";
+import { BsCheck, BsCheckAll } from "react-icons/bs";
 
 const TEN_MIN = 10 * 60 * 1000;
 
@@ -268,7 +269,18 @@ useChatEffects({
                           )
                         )}
                         {message.text && <p className="text-sm break-words">{message.text}</p>}
-                        <p className="text-[10px] mt-1.5 opacity-70 text-right">{formatTime(message.createdAt)}</p>
+                        <div className="flex justify-end items-center gap-1 mt-1.5">
+  <span className="text-[10px] opacity-70">
+    {formatTime(message.createdAt)}
+  </span>
+
+  {isMine &&
+    (message.seen ? (
+      <BsCheckAll className="text-[13px] text-cyan-300" />
+    ) : (
+      <BsCheck className="text-[13px] text-gray-300" />
+    ))}
+</div>
                       </>
                     )}
                   </div>

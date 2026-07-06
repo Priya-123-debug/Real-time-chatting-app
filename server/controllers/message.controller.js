@@ -2,6 +2,10 @@ import Message from "../models/Message.model.js";
 
 import { emitToUser } from "../socket/socket.js";
 import ChatClear from "../models/ChatClear.model.js";
+import {
+ 
+  activeConversationMap,
+} from "../socket/socket.js";
 
 // get messages between two users
 export const getMessages = async (req, res) => {
@@ -46,15 +50,33 @@ export const sendMessage = async (req, res) => {
     const { userId: receiverId } = req.params;
     const senderId = req.user._id;
 
-    const message = await Message.create({ senderId, receiverId, text });
+    const isSeen =
+      activeConversationMap.get(receiverId)?.toString() ===
+      senderId.toString();
 
-    // emit to receiver in real time via socket.io
-emitToUser(receiverId, "newMessage", message);
+    const message = await Message.create({
+      senderId,
+      receiverId,
+      text,
+      seen: isSeen,
+    });
+
+    emitToUser(receiverId, "newMessage", message);
+
+    if (isSeen) {
+      emitToUser(senderId, "messagesSeen", {
+        messageId: message._id,
+      });
+    }
+
     res.status(201).json(message);
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
+
 
 
 
@@ -126,6 +148,58 @@ export const clearChat = async (req, res) => {
       message: "Chat cleared successfully",
     });
   } catch (err) {
+    return res.status(500).json({
+      message: "Server Error",
+    });
+  }
+};
+
+
+export const markMessagesSeen = async (req, res) => {
+  try {
+    const { userId } = req.params; // Alice
+    const myId = req.user._id;     // Bob
+
+    // Find unread messages
+    const unreadMessages = await Message.find({
+      senderId: userId,
+      receiverId: myId,
+      seen: false,
+    }).select("_id");
+
+    const messageIds = unreadMessages.map((msg) => msg._id);
+
+    // Nothing to update
+    if (messageIds.length === 0) {
+      return res.status(200).json({
+        message: "No unread messages.",
+      });
+    }
+
+    // Mark all as seen
+    await Message.updateMany(
+      {
+        _id: { $in: messageIds },
+      },
+      {
+        $set: {
+          seen: true,
+        },
+      }
+    );
+
+    // Notify Alice on all her devices
+    emitToUser(userId, "messagesSeen", {
+      messageIds,
+    });
+
+    return res.status(200).json({
+      message: "Messages marked as seen.",
+    });
+
+  } catch (error) {
+    console.log(error);
+
     return res.status(500).json({
       message: "Server Error",
     });

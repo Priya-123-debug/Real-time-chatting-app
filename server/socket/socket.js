@@ -14,6 +14,8 @@ const io = new Server(server, {
 
 // userId -> Set(socketIds)
 const userSocketMap = new Map();
+export const activeConversationMap = new Map();
+
 
 // Get all socket ids of a user
 export const getReceiverSocketIds = (userId) => {
@@ -54,6 +56,22 @@ io.on("connection", (socket) => {
     io.emit("getOnlineUsers", getOnlineUsers());
   }
 
+
+socket.on("openConversation", ({ receiverId }) => {
+  activeConversationMap.set(userId, receiverId);
+});
+socket.on("closeConversation", () => {
+  activeConversationMap.delete(userId);
+});
+
+
+
+
+
+
+
+
+
   // ==========================
   // Typing Indicator
   // ==========================
@@ -89,9 +107,8 @@ io.on("connection", (socket) => {
     // Remove user if no devices remain
     if (sockets.size === 0) {
       userSocketMap.delete(userId);
+      activeConversationMap.delete(userId);
     }
-
-    console.log(userSocketMap);
 
     // Notify everyone
     io.emit("getOnlineUsers", getOnlineUsers());
