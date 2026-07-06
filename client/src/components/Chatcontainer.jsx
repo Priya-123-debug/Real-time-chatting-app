@@ -19,8 +19,58 @@ function Chatcontainer({ selectedUser, onBack }) {
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
+  const [isTyping, setIsTyping] = useState(false);
+const typingTimeout = useRef(null);
+const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
 
   const isOnline = selectedUser && onlineUsers.includes(selectedUser._id);
+
+  const handleTyping = (e) => {
+    if (!socket || !selectedUser) return;
+    setInput(e.target.value);
+
+    if (!isTyping) {
+        socket.emit("typingStart", {
+            receiverId: selectedUser._id,
+        });
+
+        setIsTyping(true);
+    }
+
+    clearTimeout(typingTimeout.current);
+
+    typingTimeout.current = setTimeout(() => {
+        socket.emit("typingStop", {
+            receiverId: selectedUser._id,
+        });
+
+        setIsTyping(false);
+    }, 1000);
+};
+
+useEffect(() => {
+  if (!socket || !selectedUser) return;
+
+  const handleTypingStart = ({ userId }) => {
+    if (userId === selectedUser._id) {
+      setIsOtherUserTyping(true);
+    }
+  };
+
+  const handleTypingStop = ({ userId }) => {
+    if (userId === selectedUser._id) {
+      setIsOtherUserTyping(false);
+    }
+  };
+
+  socket.on("typingStart", handleTypingStart);
+  socket.on("typingStop", handleTypingStop);
+
+  return () => {
+    socket.off("typingStart", handleTypingStart);
+    socket.off("typingStop", handleTypingStop);
+  };
+}, [socket, selectedUser]);
 
   useEffect(() => {
     if (!selectedUser) return;
@@ -162,6 +212,11 @@ function Chatcontainer({ selectedUser, onBack }) {
     }
     setActiveMessageId(null);
   };
+
+
+  useEffect(() => {
+  setIsOtherUserTyping(false);
+}, [selectedUser]);
 
   if (!selectedUser) {
     return (
@@ -341,7 +396,34 @@ function Chatcontainer({ selectedUser, onBack }) {
       )}
 
       {/* Input */}
+      {isOtherUserTyping && (
+  <div className="px-5 py-2 bg-[#141924] border-t border-white/5">
+    <div className="flex items-center gap-2">
+      <span className="flex gap-1">
+        <span className="w-2 h-2 rounded-full bg-violet-400 animate-bounce"></span>
+        <span
+          className="w-2 h-2 rounded-full bg-violet-400 animate-bounce"
+          style={{ animationDelay: "0.15s" }}
+        ></span>
+        <span
+          className="w-2 h-2 rounded-full bg-violet-400 animate-bounce"
+          style={{ animationDelay: "0.3s" }}
+        ></span>
+      </span>
+
+      <span className="text-sm text-gray-400 italic">
+        {selectedUser.username} is typing...
+      </span>
+    </div>
+  </div>
+)}
       <div className="shrink-0 px-4 md:px-5 py-3 md:py-4 border-t border-white/5 bg-[#141924] flex items-center gap-2 md:gap-3">
+    
+    
+
+
+      
+      
         <input
           ref={fileInputRef}
           type="file"
@@ -359,7 +441,7 @@ function Chatcontainer({ selectedUser, onBack }) {
           type="text"
           placeholder="Type a message..."
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+         onChange={handleTyping}
           onKeyDown={(e) => { if (e.key === "Enter") handleSend(); }}
           className="flex-1 bg-[#1C2333] text-white px-5 py-3 rounded-full outline-none placeholder-gray-500 border border-white/5 focus:border-violet-500/50 transition"
         />

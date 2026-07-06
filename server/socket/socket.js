@@ -15,18 +15,21 @@ const io = new Server(server, {
 // userId -> Set(socketIds)
 const userSocketMap = new Map();
 
-// Returns one socket id (useful for direct messaging)
-export const getReceiverSocketId = (userId) => {
-  const sockets = userSocketMap.get(userId);
-
-  if (!sockets || sockets.size === 0) {
-    return null;
-  }
-
-  return [...sockets][0];
+// Get all socket ids of a user
+export const getReceiverSocketIds = (userId) => {
+  return userSocketMap.get(userId) || new Set();
 };
 
-// Returns all online users
+// Emit an event to every device of a user
+export const emitToUser = (userId, event, data) => {
+  const socketIds = getReceiverSocketIds(userId);
+
+  for (const socketId of socketIds) {
+    io.to(socketId).emit(event, data);
+  }
+};
+
+// Online users
 export const getOnlineUsers = () => {
   return [...userSocketMap.keys()];
 };
@@ -42,7 +45,7 @@ io.on("connection", (socket) => {
       userSocketMap.set(userId, new Set());
     }
 
-    // Add this socket to the user's active sockets
+    // Add current socket
     userSocketMap.get(userId).add(socket.id);
 
     console.log(userSocketMap);
@@ -50,6 +53,26 @@ io.on("connection", (socket) => {
     // Notify everyone
     io.emit("getOnlineUsers", getOnlineUsers());
   }
+
+  // ==========================
+  // Typing Indicator
+  // ==========================
+
+  socket.on("typingStart", ({ receiverId }) => {
+    emitToUser(receiverId, "typingStart", {
+      userId,
+    });
+  });
+
+  socket.on("typingStop", ({ receiverId }) => {
+    emitToUser(receiverId, "typingStop", {
+      userId,
+    });
+  });
+
+  // ==========================
+  // Disconnect
+  // ==========================
 
   socket.on("disconnect", () => {
     console.log("Socket Disconnected:", socket.id);
@@ -63,11 +86,9 @@ io.on("connection", (socket) => {
     // Remove only this socket
     sockets.delete(socket.id);
 
-    // If no active sockets remain, remove the user
+    // Remove user if no devices remain
     if (sockets.size === 0) {
       userSocketMap.delete(userId);
-
-      // Later we'll also update lastSeen in MongoDB here
     }
 
     console.log(userSocketMap);

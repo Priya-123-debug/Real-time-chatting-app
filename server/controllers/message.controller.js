@@ -1,5 +1,6 @@
 import Message from "../models/Message.model.js";
-import { getReceiverSocketId, io } from "../socket/socket.js";
+
+import { emitToUser } from "../socket/socket.js";
 import ChatClear from "../models/ChatClear.model.js";
 
 // get messages between two users
@@ -48,11 +49,7 @@ export const sendMessage = async (req, res) => {
     const message = await Message.create({ senderId, receiverId, text });
 
     // emit to receiver in real time via socket.io
-    const receiverSocketId = getReceiverSocketId(receiverId);
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("newMessage", message);
-    }
-
+emitToUser(receiverId, "newMessage", message);
     res.status(201).json(message);
   } catch (err) {
     res.status(500).json({ message: "Server error" });
