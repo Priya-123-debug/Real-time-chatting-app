@@ -3,11 +3,17 @@ import { getMessages, sendMessage ,clearChat} from "../controllers/message.contr
 import protectRoute from "../middleware/protectRoute.js";
 import { deleteMessageForMe } from "../controllers/message.controller.js";
 import { markMessagesSeen } from "../controllers/message.controller.js";
+import upload from "../middleware/multer.js";
 
 const router = express.Router();
 
 router.get("/:userId", protectRoute, getMessages);
-router.post("/send/:userId", protectRoute, sendMessage);
+router.post(
+  "/send/:userId",
+  protectRoute,
+  upload.single("media"),
+  sendMessage
+);
 router.delete("/:messageId", protectRoute, deleteMessageForMe);
 router.post("/clear/:userId", protectRoute, clearChat);
 router.put(

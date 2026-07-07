@@ -3,8 +3,9 @@ import api from "./api";
 export const getMessages = (userId) =>
   api.get(`/api/messages/${userId}`);
 
-export const sendMessage = (userId, text) =>
-  api.post(`/api/messages/send/${userId}`, { text });
+export const sendMessage = (userId, formData) =>
+  api.post(`/api/messages/send/${userId}`, formData);
+
 
 export const deleteMessage = (messageId, mode) =>
   api.delete(`/api/messages/${messageId}`, {

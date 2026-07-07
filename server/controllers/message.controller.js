@@ -6,6 +6,7 @@ import {
  
   activeConversationMap,
 } from "../socket/socket.js";
+import uploadToCloudinary from "../utils/uploadToCloudinary.js";
 
 // get messages between two users
 export const getMessages = async (req, res) => {
@@ -50,16 +51,37 @@ export const sendMessage = async (req, res) => {
     const { userId: receiverId } = req.params;
     const senderId = req.user._id;
 
+    let media = {};
+
+    if (req.file) {
+   
+      const uploaded = await uploadToCloudinary(req.file);
+     
+
+      media = {
+        url: uploaded.secure_url,
+        publicId: uploaded.public_id,
+        type: req.file.mimetype,
+        originalName: req.file.originalname,
+        size: req.file.size,
+      };
+    }
+
     const isSeen =
       activeConversationMap.get(receiverId)?.toString() ===
       senderId.toString();
+
+    
 
     const message = await Message.create({
       senderId,
       receiverId,
       text,
+      media,
       seen: isSeen,
     });
+
+    
 
     emitToUser(receiverId, "newMessage", message);
 
@@ -71,7 +93,9 @@ export const sendMessage = async (req, res) => {
 
     res.status(201).json(message);
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    console.error("ERROR:");
+    console.error(err);
+    res.status(500).json({ message: err.message });
   }
 };
 
