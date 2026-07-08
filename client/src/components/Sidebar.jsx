@@ -5,12 +5,19 @@ import { useAuth } from '../context/AuthContext';
 import { logout } from '../services/authService';
 import { getAvatarUrl } from "../utilis/avatar";
 import { useSocket } from "../context/SocketContext";
+import { useState } from 'react';
+import { searchUsers } from '../services/usersService';
+import { useEffect } from 'react';
 
 
 
 function Sidebar({ users = [], loading, selectedUser, setSelectedUser }) {
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
+  const [search, setSearch] = useState("");
+
+
+const [searchResults, setSearchResults] = useState([]);
   
   const { onlineUsers } = useSocket();
 
@@ -18,6 +25,38 @@ function Sidebar({ users = [], loading, selectedUser, setSelectedUser }) {
     await logout();
     setUser(null);
   };
+
+
+  useEffect(() => {
+
+  if (!search.trim()) {
+
+    setSearchResults([]);
+
+    return;
+
+  }
+
+  const timer = setTimeout(async () => {
+
+    try {
+
+      const res = await searchUsers(search);
+
+      setSearchResults(res.data);
+
+    } catch (err) {
+
+      console.error(err);
+
+    }
+
+  }, 300);
+
+  return () => clearTimeout(timer);
+
+}, [search]);
+  const displayUsers = search.trim() ? searchResults : users;
 
   return (
     <div className={`bg-[#0B0F1A] h-full flex flex-col p-4 md:p-5 overflow-y-auto text-white ${selectedUser ? "max-md:hidden" : ""}`}>
@@ -75,6 +114,9 @@ function Sidebar({ users = [], loading, selectedUser, setSelectedUser }) {
             type="text"
             className="bg-transparent border-none outline-none text-white text-sm placeholder-gray-500 flex-1"
             placeholder="Search user..."
+            value={search}
+
+onChange={(e) => setSearch(e.target.value)}
           />
         </div>
       </div>
@@ -86,7 +128,7 @@ function Sidebar({ users = [], loading, selectedUser, setSelectedUser }) {
         ) : users.length === 0 ? (
           <p className="text-gray-500 text-sm text-center mt-6">No users found</p>
         ) : (
-          users.map((u) => {
+          displayUsers.map((u) => {
             const isActive = selectedUser?._id === u._id;
              const isOnline = onlineUsers.includes(u._id);
             return (
