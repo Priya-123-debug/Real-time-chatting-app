@@ -19,6 +19,13 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: "",
   },
+  profilePicPublicId: {
+
+  type: String,
+
+  default: "",
+
+}
 }, { timestamps: true });
 // Username index for fast search
 
