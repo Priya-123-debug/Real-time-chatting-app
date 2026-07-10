@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar';
-import Chatcontainer from '../components/ChatContainer';
-import Rightsidebar from '../components/RightSidebar';
+import Chatcontainer from '../components/Chatcontainer';
+import Rightsidebar from '../components/Rightsidebar';
 import { getUsers } from '../services/messageService';
 
 function HomePage() {
